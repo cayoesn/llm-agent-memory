@@ -1,16 +1,20 @@
-from pydantic import BaseModel
-from typing import List, Optional
-from uuid import UUID
 from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel
+
 from app.domain.entities import MemoryType
+
 
 class MemoryCreate(BaseModel):
     content: str
     memory_type: MemoryType
     session_id: str
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
     importance_score: float = 0.0
-    extra: dict = {}
+    extra: dict[str, Any] = {}
+
 
 class MemoryResponse(BaseModel):
     id: UUID
@@ -19,6 +23,7 @@ class MemoryResponse(BaseModel):
     session_id: str
     importance_score: float
     created_at: datetime
+
 
 class SearchRequest(BaseModel):
     query: str

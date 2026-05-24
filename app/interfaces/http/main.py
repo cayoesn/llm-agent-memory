@@ -1,14 +1,16 @@
-from fastapi import FastAPI, Depends, HTTPException
-from app.schemas.memory import MemoryCreate, MemoryResponse, SearchRequest
-from app.application.store_memory import StoreMemoryUseCase
+import os
+
+from fastapi import Depends, FastAPI
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.application.retrieve_memory import RetrieveMemoryUseCase
-from app.infrastructure.storage.postgres.session import get_db
+from app.application.store_memory import StoreMemoryUseCase
+from app.infrastructure.ollama.client import OllamaClient
 from app.infrastructure.storage.postgres.repository import PostgresMemoryRepository
+from app.infrastructure.storage.postgres.session import get_db
 from app.infrastructure.storage.qdrant.adapter import QdrantAdapter
 from app.infrastructure.storage.redis.cache import RedisCache
-from app.infrastructure.ollama.client import OllamaClient
-from sqlalchemy.ext.asyncio import AsyncSession
-import os
+from app.schemas.memory import MemoryCreate, MemoryResponse, SearchRequest
 
 app = FastAPI(title="Agent Memory Engine API")
 
@@ -17,9 +19,11 @@ ollama_client = OllamaClient(base_url=os.getenv("OLLAMA_BASE_URL", "http://local
 qdrant_adapter = QdrantAdapter(host=os.getenv("QDRANT_HOST", "localhost"))
 redis_cache = RedisCache()
 
+
 @app.on_event("startup")
 async def startup():
     await qdrant_adapter.ensure_collection()
+
 
 @app.post("/memory/store", response_model=MemoryResponse)
 async def store_memory(cmd: MemoryCreate, db: AsyncSession = Depends(get_db)):
@@ -32,17 +36,20 @@ async def store_memory(cmd: MemoryCreate, db: AsyncSession = Depends(get_db)):
         memory_type=memory.memory_type,
         session_id=memory.metadata.session_id,
         importance_score=memory.importance_score,
-        created_at=memory.metadata.created_at
+        created_at=memory.metadata.created_at,
     )
+
 
 @app.post("/memory/search")
 async def search_memory(req: SearchRequest):
     use_case = RetrieveMemoryUseCase(qdrant_adapter, ollama_client)
     return await use_case.execute(req.query, req.session_id, req.limit)
 
+
 @app.get("/health/live")
 async def liveness():
     return {"status": "alive"}
+
 
 @app.get("/health/ready")
 async def readiness():

@@ -1,9 +1,10 @@
 from app.infrastructure.ollama.client import OllamaClient
 from app.telemetry.logger import logger
 
+
 class SummarizationService:
     """Service to compress memories using LLM summarization."""
-    
+
     def __init__(self, ollama: OllamaClient):
         self.ollama = ollama
 
@@ -19,7 +20,7 @@ class SummarizationService:
         
         Summary:
         """
-        
+
         try:
             summary = await self.ollama.generate("llama3", prompt)
             return summary.strip()
