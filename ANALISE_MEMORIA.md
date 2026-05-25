@@ -12,7 +12,6 @@ Este documento apresenta uma análise detalhada da arquitetura do projeto **Agen
 | **Memory** | [Semantic Memory](#2-semantic-memory) | ✅ Implementado | Qdrant + Ollama | [store_memory.py](app/application/store_memory.py) |
 | **Memory** | [Episodic Memory](#3-episodic-memory) | ✅ Implementado | PostgreSQL | [repository.py](app/infrastructure/storage/postgres/repository.py) |
 | **Memory** | [Reflection Memory](#4-reflection-memory) | ✅ Implementado | Ollama (Llama3) | [scheduler.py](app/workers/scheduler.py) |
-| **Memory** | [Shared Multi-Agent Memory](#5-shared-multi-agent-memory) | ❌ N/A | (Fora do Escopo) | N/A |
 | **Memory** | [Hierarchical Memory](#6-hierarchical-memory) | ✅ Implementado | Summarization + DB | [hierarchy_builder.py](app/application/hierarchy_builder.py) |
 | **Memory** | [Contextual Memory](#7-contextual-memory) | ✅ Implementado | Orquestração Python | [context_builder.py](app/application/context_builder.py) |
 | **Memory** | [Temporal Memory](#8-temporal-memory) | ✅ Implementado | Qdrant Filters | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |

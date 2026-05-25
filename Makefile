@@ -1,4 +1,4 @@
-.PHONY: help install run api test coverage lint format docker-up docker-down logs migrate-up migrate-down migrate-revision benchmark
+.PHONY: help install run api test coverage lint format docker-up docker-down logs up down restart ps shell migrate-up migrate-down migrate-revision benchmark
 
 DC = docker compose
 VENV = .venv
@@ -17,6 +17,11 @@ help:
 	@echo "  make format            - formata o codigo com black e ruff --fix"
 	@echo "  make docker-up         - sobe a stack Docker completa"
 	@echo "  make docker-down       - derruba a stack Docker"
+	@echo "  make up                - alias para docker-up"
+	@echo "  make down              - alias para docker-down"
+	@echo "  make restart           - reinicia os containers"
+	@echo "  make ps                - lista os services em execucao"
+	@echo "  make shell             - abre shell no container da app"
 	@echo "  make logs              - acompanha logs da stack"
 	@echo "  make migrate-up        - aplica migrations pendentes"
 	@echo "  make migrate-down      - faz downgrade da ultima migration"
@@ -51,6 +56,19 @@ docker-up:
 
 docker-down:
 	$(DC) down
+
+up: docker-up
+
+down: docker-down
+
+restart:
+	$(DC) restart
+
+ps:
+	$(DC) ps
+
+shell:
+	$(DC) exec app /bin/sh
 
 logs:
 	$(DC) logs -f

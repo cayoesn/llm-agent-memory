@@ -3,94 +3,242 @@
 ![Coverage](https://img.shields.io/badge/Coverage-84%25-green?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
 > Uma engine de memória avançada para agentes de IA que precisam lembrar do passado, aprender com o presente e planejar o futuro.
 
 Este projeto não é apenas um banco de dados; é um **sistema nervoso central** para agentes de Inteligência Artificial. Ele decide o que é importante lembrar, o que deve ser esquecido e como recuperar a informação certa no momento certo.
 
+## 📚 Sumário
+
+- [🧭 Visão Geral](#-visão-geral)
+- [🏗️ Arquitetura e Tecnologias](#-arquitetura-e-tecnologias)
+- [🚀 Funcionalidades](#-funcionalidades)
+- [📁 Estrutura do Repositório](#-estrutura-do-repositório)
+- [🛠️ Instalação e Setup](#-instalação-e-setup)
+- [🧪 Como Usar (Endpoints)](#-como-usar-endpoints)
+- [📊 Observabilidade](#-observabilidade)
+- [✅ Testes e Coverage](#-testes-e-coverage)
+- [📖 Documentação Teórica](#-documentação-teórica)
+
 ---
 
-## 🧭 Visão Geral (O que é isso?)
+## 🧭 Visão Geral
 
-Imagine que você está construindo um assistente pessoal.
-- Se ele esquecer o que você disse há 5 segundos, ele é **burro**.
-- Se ele ler 500 páginas de logs toda vez que você fizer uma pergunta, ele é **lento**.
-- Se ele trouxer a mesma resposta repetida 10 vezes, ele é **chato**.
+O **Agent Memory Engine** resolve os problemas clássicos de memória em LLMs:
+- **Context Window Management**: Decide o que manter na memória RAM (Redis) e o que arquivar.
+- **Semantic Retrieval**: Busca por significado, não apenas palavras-chave.
+- **Episodic Continuity**: Mantém a ordem cronológica dos fatos.
+- **Cognitive Reflection**: O sistema "reflete" sobre memórias passadas para gerar novos insights.
 
-O **Agent Memory Engine** resolve isso separando a memória em camadas (como o cérebro humano) e usando algoritmos matemáticos sênior para buscar dados.
-
-### 🧠 Como a memória é organizada:
-1.  **Working Memory (RAM)**: Fica no **Redis**. Guarda os últimos segundos da conversa. É instantâneo.
-2.  **Semantic Memory (Fatos)**: Fica no **Qdrant**. Guarda o significado das coisas (ex: "O usuário gosta de café").
-3.  **Episodic Memory (Diário)**: Fica no **PostgreSQL**. Guarda a sequência dos fatos (o que veio antes do quê).
-4.  **Hierarchical Memory (Resumos)**: Organiza tudo em níveis. Do detalhe bruto ao resumo global do usuário.
+### 🧠 Camadas de Memória:
+1.  **Working Memory (RAM)**: Redis. Contexto imediato e ultra-rápido.
+2.  **Semantic Memory (Fatos)**: Qdrant. Busca vetorial por similaridade.
+3.  **Episodic Memory (Diário)**: PostgreSQL. Sequência temporal de eventos.
+4.  **Hierarchical Memory (Resumos)**: Organização multinível de informações.
 
 ---
 
 ## 🏗️ Arquitetura e Tecnologias
 
+O sistema é dividido em três fluxos principais: Ingestão, Recuperação e Processamento em Background.
+
 ```mermaid
-graph TD
-    API[FastAPI] --> UseCases[Casos de Uso / Lógica]
-    UseCases --> Redis[(Redis: Working Memory)]
-    UseCases --> Qdrant[(Qdrant: Busca Vetorial)]
-    UseCases --> Postgres[(Postgres: Metadados)]
-    UseCases --> Ollama[Ollama: Inteligência/LLM]
+graph TB
+
+    subgraph Client_Layer["Client Layer"]
+        User(["Usuário / Agente Externo"])
+    end
+
+    subgraph API_Layer["API Layer - FastAPI"]
+        Endpoints["HTTP Endpoints"]
+        Telemetry["Telemetry - OTel / Jaeger / Prometheus"]
+    end
+
+    subgraph App_Layer["Application Layer"]
+        direction TB
+
+        subgraph Store_Flow["Fluxo de Ingestão"]
+            StoreSvc["StoreMemoryService"]
+        end
+
+        subgraph Retrieval_Flow["Fluxo de Recuperação"]
+            RetSvc["RetrieveMemoryService"]
+            Ranker["MemoryRanker - MMR / Decay / Hybrid"]
+            CtxBuilder["ContextBuilder"]
+        end
+
+        subgraph Background_Flow["Background Engine"]
+            Sched["APScheduler"]
+            Reflect["Reflection Engine"]
+            Hierarchy["Hierarchy Builder"]
+            Decay["Decay Manager"]
+        end
+    end
+
+    subgraph AI_Infrastructure["AI Infrastructure"]
+        Ollama["Ollama - Llama3 / Nomic-Embed"]
+    end
+
+    subgraph Storage_Layer["Storage Layer"]
+        Redis[("Redis - Working Memory / Cache")]
+        Postgres[("Postgres - Episodic Memory / Metadata")]
+        Qdrant[("Qdrant - Semantic Memory / Vector DB")]
+    end
+
+    %% Relacionamentos - Ingestão
+    User --> Endpoints
+    Endpoints --> StoreSvc
+    StoreSvc -->|"Cache Quente"| Redis
+    StoreSvc -->|"Log Episódico"| Postgres
+    StoreSvc -->|"Geração de Embeddings"| Ollama
+    Ollama -.->|"Vector"| StoreSvc
+    StoreSvc -->|"Armazenamento Vetorial"| Qdrant
+
+    %% Relacionamentos - Recuperação
+    Endpoints --> RetSvc
+    RetSvc -->|"Busca Híbrida / Vetorial"| Qdrant
+    RetSvc -->|"Reranking MMR & Tempo"| Ranker
+    Ranker -->|"Pesos de Importância"| Postgres
+    RetSvc -->|"Montagem de Contexto"| CtxBuilder
+    CtxBuilder -->|"Busca Working Memory"| Redis
+    CtxBuilder -->|"Contexto Enriquecido"| User
+
+    %% Relacionamentos - Background
+    Sched -->|"1h - Reduz relevância"| Decay
+    Decay --> Postgres
+
+    Sched -->|"4h - Gera Insights"| Reflect
+    Reflect -->|"Lê Episódios / Salva Reflexão"| Postgres
+    Reflect -->|"LLM Reasoning"| Ollama
+
+    Sched -->|"12h/24h - Compressão"| Hierarchy
+    Hierarchy -->|"Lê Chunks / Salva Sumários"| Qdrant
+    Hierarchy -->|"LLM Summarization"| Ollama
 ```
 
-- **FastAPI**: A porta de entrada rápida e moderna.
-- **Qdrant**: Onde a mágica da busca por significado acontece.
-- **Redis**: Onde guardamos o contexto "quente" da conversa.
-- **Postgres**: Nossa fonte da verdade para dados estruturados.
-- **Ollama**: O cérebro local que gera textos e entende frases.
+- **FastAPI**: Interface assíncrona de alta performance.
+- **Qdrant**: Vector Database para busca semântica e híbrida (RRF).
+- **Redis**: Cache de baixa latência para memória de curto prazo (Working Memory).
+- **PostgreSQL**: Persistência de metadados, sequências episódicas e scores de importância.
+- **Ollama**: LLM local para embeddings (nomic-embed-text) e geração de reflexões (Llama 3).
+- **OpenTelemetry**: Rastreamento distribuído para análise de latência em cada camada.
 
 ---
 
-## 🚀 Funcionalidades Incríveis (Nível Sênior)
+## 🚀 Funcionalidades
 
-### 🔎 Mecanismos de Busca Potentes
-- **Busca Híbrida**: O sistema busca por **significado** e por **palavras exatas** ao mesmo tempo.
-- **Diversidade (MMR)**: Se houverem respostas muito parecidas, o sistema escolhe as mais diferentes para enriquecer o contexto.
-- **Ponderação por Tempo**: Coisas novas valem mais que coisas velhas.
-- **Personalização**: A busca se adapta ao perfil do usuário (ex: se você é dev, ele prioriza termos técnicos).
-
-### ⚙️ Processamento em Background
-- **Reflexão Automática**: A cada 4 horas, o agente "dorme e sonha" (reflete), gerando novos insights sobre o usuário.
-- **Decaimento (Esquecimento)**: Memórias inúteis perdem força sozinhas com o tempo, limpando o ruído.
+- **Busca Híbrida (Hybrid Search)**: Combina Vetores com BM25 (palavras-chave).
+- **MMR (Maximal Marginal Relevance)**: Garante diversidade nos resultados da busca.
+- **Decaimento Temporal**: Memórias antigas perdem relevância gradualmente.
+- **Reflexão Automática**: Scheduler que processa memórias em background para gerar insights.
+- **Hierarquização de Contexto**: Cria resumos automáticos de sessões e usuários.
 
 ---
 
-## 🧪 Como Testar e Rodar (Docker)
+## 📁 Estrutura do Repositório
 
-Nós usamos **Docker** para que você não precise instalar nada pesado na sua máquina.
+```text
+alembic/                Configurações de migração de banco de dados
+app/
+├── application/        Casos de uso e orquestração (Business Logic)
+├── domain/             Entidades e serviços de domínio
+├── infrastructure/     Adaptadores de banco (Postgres, Qdrant, Redis)
+├── interfaces/         Entradas do sistema (HTTP API)
+├── schemas/            Modelos de validação Pydantic
+├── telemetry/          Configurações de Tracing e Métricas
+└── workers/            Tarefas de background (Scheduler)
+benchmarks/             Scripts de teste de performance
+docker/                 Dockerfiles da aplicação
+monitoring/             Configurações de Grafana, Prometheus, Loki
+tests/                  Suíte de testes unitários e integração
+```
+
+---
+
+## 🛠️ Instalação e Setup
+
+### 📋 Pré-requisitos
+- Docker e Docker Compose
+- Python 3.12+ (opcional para desenvolvimento local)
 
 ### 1. Preparar o Ambiente
 ```bash
 cp .env.example .env
-docker-compose build app
-```
-
-### 2. Rodar a Suíte de Testes (Validando a Qualidade)
-Este comando roda todos os testes (Unitários e Integração) e mostra a cobertura de código (**84%**):
-```bash
-docker-compose run -e PYTHONPATH=/app app pytest --cov=app --cov-report=term-missing tests
-```
-
-### 3. Subir o Sistema
-```bash
 make docker-up
 ```
 
+### 2. Configurar o Ollama
+Após subir os containers, baixe os modelos necessários:
+```bash
+docker exec -it ollama ollama pull llama3
+docker exec -it ollama ollama pull nomic-embed-text
+```
+
 ---
 
-## 📖 Documentação Detalhada
+## 🧪 Como Usar (Endpoints)
 
-Para entender a teoria por trás de cada um dos 20 conceitos implementados (ex: RRF, MMR, Decay), acesse:
+### 🩺 Health Check
+```bash
+curl http://localhost:8000/health
+```
+
+### 📥 Armazenar uma Memória
+```bash
+curl -X POST http://localhost:8000/memories \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "O usuário prefere programar em Python e utiliza o VS Code.",
+    "user_id": "dev_123",
+    "metadata": {"category": "pref_tecnica"}
+  }'
+```
+
+### 🔍 Recuperar Memórias (Busca Semântica)
+```bash
+curl -X POST http://localhost:8000/memories/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Qual a linguagem de programação favorita?",
+    "user_id": "dev_123",
+    "limit": 5
+  }'
+```
+
+### 🧠 Forçar Processo de Reflexão
+```bash
+curl -X POST http://localhost:8000/workers/reflect
+```
+
+---
+
+## 📊 Observabilidade
+
+O projeto vem com uma stack completa de observabilidade pré-configurada:
+
+- **Prometheus**: Métricas de performance e runtime (`http://localhost:9090`).
+- **Grafana**: Dashboards para visualização de dados (`http://localhost:3000`).
+- **Jaeger**: Tracing distribuído para debugar latência (`http://localhost:16686`).
+- **Loki & Promtail**: Centralização e análise de logs.
+
+---
+
+## ✅ Testes e Coverage
+
+Para garantir a qualidade, mantemos uma cobertura de testes acima de 80%.
+
+```bash
+# Rodar todos os testes
+make test
+
+# Ver relatório detalhado de cobertura
+make coverage
+```
+
+---
+
+## 📖 Documentação Teórica
+
+Para uma imersão profunda nos algoritmos e decisões arquiteturais (RRF, MMR, Decay, etc.), consulte o guia técnico:
 👉 **[ANALISE_MEMORIA.md](./ANALISE_MEMORIA.md)**
-
----
-
-## 🛠️ Decisões de Projeto
-- **Local-First**: Tudo roda na sua máquina (via Ollama), garantindo privacidade total.
-- **Clean Architecture**: A lógica de negócio é separada dos bancos de dados, facilitando a troca de tecnologias no futuro.
-- **Totalmente Assíncrono**: O sistema nunca "trava" esperando um banco de dados lento.
