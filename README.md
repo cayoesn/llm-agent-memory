@@ -223,31 +223,27 @@ curl http://localhost:8000/memory/working/<session_id>
 curl http://localhost:8000/profile/<session_id>
 ```
 
-### 🧠 Workers / Scheduler (manual triggers)
+### 🧠 Workers / Scheduler
 
-É possível disparar tarefas do scheduler manualmente para testes e E2E.
+O scheduler é configurado e iniciado automaticamente no startup da aplicação (APScheduler). As tarefas (decay, reflection, hierarchies) são executadas periodicamente conforme configuração:
 
-- Gerar reflexões (reflection):
+- Decay: a cada 1 hora
+- Reflection: a cada 4 horas
+- Hierarchy level2: a cada 12 horas
+- Hierarchy level3: a cada 24 horas
+
+Para disparar manualmente um job em um ambiente de desenvolvimento, execute dentro do container do app:
+
 ```bash
-curl -X POST http://localhost:8000/workers/reflect
+# Exemplo: rodar reflexão manualmente (executa a coroutine no loop)
+docker compose exec app bash -lc "python - <<'PY'
+import asyncio
+from app.workers.scheduler import run_reflection_generation
+asyncio.run(run_reflection_generation())
+PY"
 ```
 
-- Aplicar decaimento de importância (decay):
-```bash
-curl -X POST http://localhost:8000/workers/decay
-```
-
-- Forçar promoção de hierarquia nível 2 (session summaries):
-```bash
-curl -X POST http://localhost:8000/workers/hierarchy/level2
-```
-
-- Forçar promoção de hierarquia nível 3 (agent summaries):
-```bash
-curl -X POST http://localhost:8000/workers/hierarchy/level3
-```
-
-Os endpoints aceitam query param `run_async=true|false` (default true). Se `run_async=false`, a chamada aguardará a execução e retornará status "completed".
+Nota: não expomos endpoints HTTP para disparo manual por segurança — use o comando acima ou crie um script controlado para automação.
 
 ---
 
