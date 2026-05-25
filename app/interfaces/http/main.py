@@ -1,5 +1,5 @@
 import os
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Body
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,6 +97,19 @@ async def get_working_memory(session_id: str):
     except Exception as e:
         # Redis might be unavailable; report 503 with helpful message
         raise HTTPException(status_code=503, detail=f"Redis error while fetching working memory: {e}")
+
+
+@app.post("/memory/working/{session_id}")
+async def push_working_memory(session_id: str, content: str = Body(..., embed=True)):
+    """Convenience endpoint to push a working memory item to Redis.
+
+    Body: {"content": "..."}
+    """
+    try:
+        await redis_cache.push_to_list(f"working_mem:{session_id}", content)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Redis error while pushing working memory: {e}")
 
 
 @app.get("/profile/{session_id}")
