@@ -10,7 +10,8 @@ from app.application.user_profile_service import UserProfileService
 from app.application.hierarchical_retrieval import HierarchicalRetrievalUseCase
 from app.infrastructure.ollama.client import OllamaClient
 from app.infrastructure.storage.postgres.repository import PostgresMemoryRepository
-from app.infrastructure.storage.postgres.session import get_db
+from app.infrastructure.storage.postgres.session import get_db, engine
+from app.infrastructure.storage.postgres.models import Base
 from app.infrastructure.storage.qdrant.adapter import QdrantAdapter
 from app.infrastructure.storage.redis.cache import RedisCache
 from app.schemas.memory import MemoryCreate, MemoryResponse, SearchRequest, HierarchicalSearchRequest
@@ -26,6 +27,10 @@ redis_cache = RedisCache()
 
 @app.on_event("startup")
 async def startup():
+    # Ensure Postgres tables exist (useful for local/dev runs)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     await qdrant_adapter.ensure_collection()
     # Configure and start background scheduler tasks
     configure_scheduler(ollama_client, redis_cache)
