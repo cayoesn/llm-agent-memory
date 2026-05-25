@@ -1,5 +1,5 @@
 import os
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,16 +91,24 @@ async def search_memory_hierarchical(req: HierarchicalSearchRequest, db: AsyncSe
 
 @app.get("/memory/working/{session_id}")
 async def get_working_memory(session_id: str):
-    results = await redis_cache.get_list(f"working_mem:{session_id}")
-    return results
+    try:
+        results = await redis_cache.get_list(f"working_mem:{session_id}")
+        return results
+    except Exception as e:
+        # Redis might be unavailable; report 503 with helpful message
+        raise HTTPException(status_code=503, detail=f"Redis error while fetching working memory: {e}")
 
 
 @app.get("/profile/{session_id}")
 async def get_profile(session_id: str, db: AsyncSession = Depends(get_db)):
-    repo = PostgresMemoryRepository(db)
-    user_profile_service = UserProfileService(repo, ollama_client, redis_cache)
-    profile = await user_profile_service.get_or_build_profile(session_id)
-    return {"session_id": session_id, "profile": profile}
+    try:
+        repo = PostgresMemoryRepository(db)
+        user_profile_service = UserProfileService(repo, ollama_client, redis_cache)
+        profile = await user_profile_service.get_or_build_profile(session_id)
+        return {"session_id": session_id, "profile": profile}
+    except Exception as e:
+        # Could be DB, Redis, or LLM errors — return 503 with explanation
+        raise HTTPException(status_code=503, detail=f"Error building profile: {e}")
 
 
 @app.get("/health")
