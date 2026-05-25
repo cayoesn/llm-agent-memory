@@ -1,5 +1,7 @@
 import os
 from fastapi import Depends, FastAPI
+from fastapi.responses import Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.retrieve_memory import RetrieveMemoryUseCase
@@ -89,11 +91,15 @@ async def get_profile(session_id: str, db: AsyncSession = Depends(get_db)):
     return {"session_id": session_id, "profile": profile}
 
 
-@app.get("/health/live")
-async def liveness():
-    return {"status": "alive"}
+@app.get("/health")
+async def health():
+    return {
+        "live": {"status": "alive"},
+        "ready": {"status": "ready"},
+    }
 
 
-@app.get("/health/ready")
-async def readiness():
-    return {"status": "ready"}
+@app.get("/metrics")
+async def metrics():
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)

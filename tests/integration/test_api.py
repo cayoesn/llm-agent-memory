@@ -70,18 +70,11 @@ def mock_ollama():
         yield mock
 
 @pytest.mark.asyncio
-async def test_health_live():
+async def test_health():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/health/live")
+        response = await ac.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "alive"}
-
-@pytest.mark.asyncio
-async def test_health_ready():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        response = await ac.get("/health/ready")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    assert response.json() == {"live": {"status": "alive"}, "ready": {"status": "ready"}}
 
 @pytest.mark.asyncio
 async def test_store_and_search_memory_integration():

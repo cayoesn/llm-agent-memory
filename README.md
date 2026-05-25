@@ -184,29 +184,46 @@ docker exec -it ollama ollama pull nomic-embed-text
 curl http://localhost:8000/health
 ```
 
+### 📊 Metrics (Prometheus)
+```bash
+curl http://localhost:8000/metrics
+```
+
 ### 📥 Armazenar uma Memória
 ```bash
-curl -X POST http://localhost:8000/memories \
+curl -X POST http://localhost:8000/memory/store \
   -H "Content-Type: application/json" \
   -d '{
     "content": "O usuário prefere programar em Python e utiliza o VS Code.",
-    "user_id": "dev_123",
-    "metadata": {"category": "pref_tecnica"}
+    "memory_type": "semantic",
+    "session_id": "dev_123",
+    "importance_score": 0.8
   }'
 ```
 
 ### 🔍 Recuperar Memórias (Busca Semântica)
 ```bash
-curl -X POST http://localhost:8000/memories/search \
+curl -X POST http://localhost:8000/memory/search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Qual a linguagem de programação favorita?",
-    "user_id": "dev_123",
+    "session_id": "dev_123",
     "limit": 5
   }'
 ```
 
-### 🧠 Forçar Processo de Reflexão
+### 🧠 Working Memory (Redis)
+```bash
+# Get working memory for a session
+curl http://localhost:8000/memory/working/<session_id>
+```
+
+### 👤 User Profile
+```bash
+curl http://localhost:8000/profile/<session_id>
+```
+
+### 🧠 Forçar Processo de Reflexão (se exposto)
 ```bash
 curl -X POST http://localhost:8000/workers/reflect
 ```
@@ -228,13 +245,24 @@ O projeto vem com uma stack completa de observabilidade pré-configurada:
 
 Para garantir a qualidade, mantemos uma cobertura de testes acima de 80%.
 
-```bash
-# Rodar todos os testes
-make test
+Observação: os testes importam o package 'app' diretamente. Antes de rodar os testes localmente, adicione o diretório do projeto ao PYTHONPATH ou instale em modo editable.
 
-# Ver relatório detalhado de cobertura
-make coverage
+Windows (PowerShell):
+```powershell
+$env:PYTHONPATH = "$PWD"; pytest -q
 ```
+Unix / macOS:
+```bash
+PYTHONPATH=. pytest -q
+```
+
+Ou instale o projeto em modo editable:
+```bash
+pip install -e .
+pytest -q
+```
+
+Se estiver usando Docker / Docker Compose, use 'make test' que já prepara o ambiente.
 
 ---
 
