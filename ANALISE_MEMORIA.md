@@ -8,25 +8,25 @@ Este documento apresenta uma análise detalhada da arquitetura do projeto **Agen
 
 | Categoria | Tipo de Mecanismo | Status | Tecnologia Utilizada | Arquivo Principal |
 | :--- | :--- | :---: | :--- | :--- |
-| **Memory** | [Working Memory](#1-working-memory) | ✅ Implementado | Redis | [main.py](app/interfaces/http/main.py) |
+| **Memory** | [Working Memory](#1-working-memory) | ✅ Implementado | Redis (lista, janela deslizante) | [redis/cache.py](app/infrastructure/storage/redis/cache.py) |
 | **Memory** | [Semantic Memory](#2-semantic-memory) | ✅ Implementado | Qdrant + Ollama | [store_memory.py](app/application/store_memory.py) |
-| **Memory** | [Episodic Memory](#3-episodic-memory) | ✅ Implementado | PostgreSQL | [repository.py](app/infrastructure/storage/postgres/repository.py) |
+| **Memory** | [Episodic Memory](#3-episodic-memory) | ✅ Implementado | PostgreSQL (SQLAlchemy Async) | [repository.py](app/infrastructure/storage/postgres/repository.py) |
 | **Memory** | [Reflection Memory](#4-reflection-memory) | ✅ Implementado | Ollama (Llama3) | [scheduler.py](app/workers/scheduler.py) |
-| **Memory** | [Hierarchical Memory](#6-hierarchical-memory) | ✅ Implementado | Summarization + DB | [hierarchy_builder.py](app/application/hierarchy_builder.py) |
-| **Memory** | [Contextual Memory](#7-contextual-memory) | ✅ Implementado | Orquestração Python | [context_builder.py](app/application/context_builder.py) |
-| **Memory** | [Temporal Memory](#8-temporal-memory) | ✅ Implementado | Qdrant Filters | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |
+| **Memory** | [Hierarchical Memory](#6-hierarchical-memory) | ✅ Implementado | Summarization + Qdrant + Postgres | [hierarchy_builder.py](app/application/hierarchy_builder.py) |
+| **Memory** | [Contextual Memory](#7-contextual-memory) | ✅ Implementado | Orquestração Python + Redis | [context_builder.py](app/application/context_builder.py) |
+| **Memory** | [Temporal Memory](#8-temporal-memory) | ✅ Implementado | Qdrant Filters (since/until) | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |
 | **Memory** | [Compressed Memory](#9-compressed-memory) | ✅ Implementado | Ollama (Llama3) | [summarize_memories.py](app/application/summarize_memories.py) |
-| **Memory** | [Adaptive/Decay Memory](#10-adaptivedecay-memory) | ✅ Implementado | Algoritmo Matemático | [services.py](app/domain/services.py) |
+| **Memory** | [Adaptive/Decay Memory](#10-adaptivedecay-memory) | ✅ Implementado | Algoritmo Matemático (exponencial) | [services.py](app/domain/services.py) |
 | **Search** | [Semantic Search](#11-semantic-search) | ✅ Implementado | Embeddings + Qdrant | [retrieve_memory.py](app/application/retrieve_memory.py) |
 | **Search** | [Vector Search](#12-vector-search) | ✅ Implementado | Qdrant | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |
 | **Search** | [Top-K Retrieval](#13-top-k-retrieval) | ✅ Implementado | Qdrant Limit | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |
 | **Search** | [Metadata Filtering](#14-metadata-filtering) | ✅ Implementado | Qdrant Payload | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |
-| **Search** | [Hybrid Search](#15-hybrid-search) | ✅ Implementado | BM25 + Embeddings + RRF | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |
-| **Search** | [Time-Weighted Retrieval](#16-time-weighted-retrieval) | ✅ Implementado | Recency Score | [services.py](app/domain/services.py) |
-| **Search** | [MMR Retrieval](#17-mmr-retrieval) | ✅ Implementado | Diversidade (MMR) | [services.py](app/domain/services.py) |
+| **Search** | [Hybrid Search](#15-hybrid-search) | ✅ Implementado | Sparse + Dense (RRF fusion) | [adapter.py](app/infrastructure/storage/qdrant/adapter.py) |
+| **Search** | [Time-Weighted Retrieval](#16-time-weighted-retrieval) | ✅ Implementado | Recency Score (DecayManager) | [services.py](app/domain/services.py) |
+| **Search** | [MMR Retrieval](#17-mmr-retrieval) | ✅ Implementado | Diversidade (MMRReranker) | [services.py](app/domain/services.py) |
 | **Search** | [Context-Aware Retrieval](#18-context-aware-retrieval) | ✅ Implementado | Redis + Qdrant | [context_builder.py](app/application/context_builder.py) |
-| **Search** | [Personalized Retrieval](#19-personalized-retrieval) | ✅ Implementado | User Profile Blend | [user_profile_service.py](app/application/user_profile_service.py) |
-| **Search** | [Hierarchical Retrieval](#20-hierarchical-retrieval) | ✅ Implementado | Multi-level Fetch | [hierarchical_retrieval.py](app/application/hierarchical_retrieval.py) |
+| **Search** | [Personalized Retrieval](#19-personalized-retrieval) | ✅ Implementado | User Profile Blend (cached) | [user_profile_service.py](app/application/user_profile_service.py) |
+| **Search** | [Hierarchical Retrieval](#20-hierarchical-retrieval) | ✅ Implementado | Multi-level Fetch + Summaries | [hierarchical_retrieval.py](app/application/hierarchical_retrieval.py) |
 
 ---
 
@@ -91,7 +91,18 @@ Este documento apresenta uma análise detalhada da arquitetura do projeto **Agen
 ## 🛠️ Tecnologias e Decisões
 
 1.  **FastAPI:** Escolhido por ser assíncrono e muito rápido para APIs de IA.
-2.  **Qdrant:** Banco vetorial que suporta busca híbrida nativa, o que facilitou a implementação do BM25.
-3.  **Redis:** Perfeito para Working Memory por causa da latência de microssegundos.
-4.  **SQLAlchemy Async:** Permite que o banco de dados Postgres não trave a aplicação enquanto salva dados pesados.
-5.  **FastEmbed:** Biblioteca leve para gerar os vetores esparsos (BM25) sem precisar de um servidor gigante.
+2.  **Qdrant:** Banco vetorial que suporta busca híbrida nativa; usado para pesquisa densa, filtros temporais e payloads.
+3.  **Redis:** Usado como Working Memory (listas) e cache de perfis; implementa janela deslizante via RPUSH/LTRIM.
+4.  **SQLAlchemy Async + Postgres:** Armazenamento episódico e metadados; o app cria tabelas no startup e é fail‑fast quando o DB não está disponível (configuração atual).
+5.  **Ollama (LLM local):** Gera embeddings e respostas para sumarização/reflexão; chamado com retries e tracing.
+6.  **FastEmbed / Sparse Encoder:** Gera vetores esparsos para suporte a busca híbrida (BM25-like).
+
+Notas importantes e recomendações:
+
+- Dimensão do embedding: o código assume vetores de tamanho 768 por padrão. Tornar `vector_size` configurável (env var) evita incompatibilidades entre modelos.
+- Migrações: atualmente o projeto cria tabelas via `Base.metadata.create_all` no startup e o repositório tenta criar tabelas em caso de inserção quando faltam. Para produção, usar Alembic com migrações versionadas é recomendado.
+- Startup/DB: o comportamento atual é fail‑fast (recomendado em produção). Para ambientes dev, pode-se optar por retries com backoff ao invés de fail‑fast.
+- Worker endpoints: endpoints HTTP manuais foram adicionados (/workers/reflect, /workers/decay, /workers/hierarchy/level2, /workers/hierarchy/level3) para E2E/debug. Proteger esses endpoints (token/ACL) é recomendado quando expostos.
+- Prometheus: /metrics expõe prometheus_client default registry. Em setups multi-worker (uvicorn/gunicorn), habilitar o mode multiprocess do prometheus_client e configurar coletor adequado.
+- Segurança: validar e sanitizar inputs que chegam ao LLM (prompts) para minimizar vazamento de dados sensíveis e ataques via prompt injection.
+
