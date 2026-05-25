@@ -13,7 +13,9 @@ from app.domain.entities import (
     SemanticMemory,
 )
 from app.domain.repositories import IMemoryRepository
-from app.infrastructure.storage.postgres.models import MemoryModel
+from app.infrastructure.storage.postgres.models import MemoryModel, Base
+from app.infrastructure.storage.postgres.session import engine
+from sqlalchemy.exc import ProgrammingError
 
 
 class PostgresMemoryRepository(IMemoryRepository):
@@ -51,9 +53,24 @@ class PostgresMemoryRepository(IMemoryRepository):
             hierarchy_level=memory.hierarchy_level,
             parent_id=memory.parent_id,
         )
-        self.session.add(model)
-        await self.session.commit()
-        return memory
+        try:
+            self.session.add(model)
+            await self.session.commit()
+            return memory
+        except ProgrammingError as e:
+            # Handle case where table doesn't exist yet (race on startup or missing migrations)
+            msg = str(e).lower()
+            if "relation \"memories\" does not exist" in msg or "undefinedtableerror" in msg:
+                # Attempt to create tables and retry once
+                await self.session.rollback()
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+                # Retry insert
+                self.session.add(model)
+                await self.session.commit()
+                return memory
+            # Re-raise for other programming errors
+            raise
 
     async def get_by_id(self, memory_id: UUID) -> BaseMemory | None:
         result = await self.session.execute(select(MemoryModel).where(MemoryModel.id == memory_id))
