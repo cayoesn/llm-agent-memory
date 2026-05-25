@@ -223,10 +223,31 @@ curl http://localhost:8000/memory/working/<session_id>
 curl http://localhost:8000/profile/<session_id>
 ```
 
-### 🧠 Forçar Processo de Reflexão (se exposto)
+### 🧠 Workers / Scheduler (manual triggers)
+
+É possível disparar tarefas do scheduler manualmente para testes e E2E.
+
+- Gerar reflexões (reflection):
 ```bash
 curl -X POST http://localhost:8000/workers/reflect
 ```
+
+- Aplicar decaimento de importância (decay):
+```bash
+curl -X POST http://localhost:8000/workers/decay
+```
+
+- Forçar promoção de hierarquia nível 2 (session summaries):
+```bash
+curl -X POST http://localhost:8000/workers/hierarchy/level2
+```
+
+- Forçar promoção de hierarquia nível 3 (agent summaries):
+```bash
+curl -X POST http://localhost:8000/workers/hierarchy/level3
+```
+
+Os endpoints aceitam query param `run_async=true|false` (default true). Se `run_async=false`, a chamada aguardará a execução e retornará status "completed".
 
 ---
 

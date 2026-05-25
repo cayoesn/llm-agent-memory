@@ -15,7 +15,14 @@ from app.infrastructure.storage.postgres.models import Base
 from app.infrastructure.storage.qdrant.adapter import QdrantAdapter
 from app.infrastructure.storage.redis.cache import RedisCache
 from app.schemas.memory import MemoryCreate, MemoryResponse, SearchRequest, HierarchicalSearchRequest
-from app.workers.scheduler import configure_scheduler, start_scheduler
+from app.workers.scheduler import (
+    configure_scheduler,
+    start_scheduler,
+    run_reflection_generation,
+    run_memory_decay,
+    run_hierarchy_level2_promotion,
+    run_hierarchy_level3_promotion,
+)
 
 app = FastAPI(title="Agent Memory Engine API")
 
@@ -108,3 +115,57 @@ async def health():
 async def metrics():
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+
+
+# Worker control endpoints (manual triggers for E2E / debugging)
+@app.post("/workers/reflect")
+async def workers_reflect(run_async: bool = True):
+    """Trigger reflection generation job.
+
+    If run_async is true (default), schedule the job in background and return 202.
+    If false, run synchronously and return the result status.
+    """
+    if run_async:
+        import asyncio
+
+        asyncio.create_task(run_reflection_generation())
+        return {"status": "scheduled"}
+    else:
+        await run_reflection_generation()
+        return {"status": "completed"}
+
+
+@app.post("/workers/decay")
+async def workers_decay(run_async: bool = True):
+    if run_async:
+        import asyncio
+
+        asyncio.create_task(run_memory_decay())
+        return {"status": "scheduled"}
+    else:
+        await run_memory_decay()
+        return {"status": "completed"}
+
+
+@app.post("/workers/hierarchy/level2")
+async def workers_hierarchy_level2(run_async: bool = True):
+    if run_async:
+        import asyncio
+
+        asyncio.create_task(run_hierarchy_level2_promotion())
+        return {"status": "scheduled"}
+    else:
+        await run_hierarchy_level2_promotion()
+        return {"status": "completed"}
+
+
+@app.post("/workers/hierarchy/level3")
+async def workers_hierarchy_level3(run_async: bool = True):
+    if run_async:
+        import asyncio
+
+        asyncio.create_task(run_hierarchy_level3_promotion())
+        return {"status": "scheduled"}
+    else:
+        await run_hierarchy_level3_promotion()
+        return {"status": "completed"}
