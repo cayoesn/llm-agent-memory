@@ -29,3 +29,18 @@ class SearchRequest(BaseModel):
     query: str
     session_id: str
     limit: int = 5
+    use_hybrid: bool = False
+    use_mmr: bool = False
+    personalize: bool = False
+    since: str | None = None
+    until: str | None = None
+
+
+class HierarchicalSearchRequest(BaseModel):
+    query: str
+    agent_id: str
+    session_id: str
+    limit: int = 5
+    score_threshold: float = 0.25
+
+

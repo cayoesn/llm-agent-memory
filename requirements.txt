@@ -29,3 +29,5 @@ black
 mypy
 types-redis
 types-psutil
+fastembed
+

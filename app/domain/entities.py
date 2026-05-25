@@ -31,6 +31,8 @@ class BaseMemory(BaseModel):
     memory_type: MemoryType
     metadata: MemoryMetadata
     importance_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    hierarchy_level: int = Field(default=1, ge=1, le=3)
+    parent_id: UUID | None = Field(default=None)
 
 
 class SemanticMemory(BaseMemory):
@@ -41,14 +43,25 @@ class SemanticMemory(BaseMemory):
 
 
 class EpisodicMemory(BaseMemory):
-    """Domain Entity for Sequential Event Memory."""
+    """Domain Entity for Sequential Event Memory.
+
+    Tracks events in chronological order within a session using sequence_index.
+    Each event is stamped with event_time for temporal ordering.
+    """
 
     memory_type: MemoryType = MemoryType.EPISODIC
     event_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    sequence_index: int | None = None  # Ordinal position within a session (1, 2, 3, ...)
 
 
 class ReflectionMemory(BaseMemory):
-    """Domain Entity for Derived Insights."""
+    """Domain Entity for Derived Insights.
+
+    Reflects on a batch of source memories to generate a higher-level insight
+    (e.g., user_preference, behavioral_pattern). source_memory_ids provides
+    provenance — a traceable link back to the raw memories used to produce this insight.
+    """
 
     memory_type: MemoryType = MemoryType.REFLECTION
-    insight_type: str  # e.g., "user_preference", "behavioral_pattern"
+    insight_type: str  # e.g., "user_preference", "behavioral_pattern", "auto_reflection"
+    source_memory_ids: list[UUID] = Field(default_factory=list)

@@ -17,6 +17,10 @@ class IMemoryRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_ids(self, memory_ids: list[UUID]) -> list[BaseMemory]:
+        pass
+
+    @abstractmethod
     async def get_by_session(
         self, session_id: str, memory_type: MemoryType | None = None
     ) -> list[BaseMemory]:

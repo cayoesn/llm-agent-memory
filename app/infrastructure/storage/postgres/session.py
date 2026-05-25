@@ -12,5 +12,11 @@ AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=As
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency: yields an async SQLAlchemy session per request."""
     async with AsyncSessionLocal() as session:
         yield session
+
+
+# Exposed for use by the scheduler and background workers that need to create
+# their own sessions outside of the request/response lifecycle.
+async_session_factory = AsyncSessionLocal
