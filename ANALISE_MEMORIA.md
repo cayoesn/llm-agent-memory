@@ -66,23 +66,23 @@ Este documento apresenta uma análise detalhada da arquitetura do projeto **Agen
 
 ## 🔎 Parte 2: Mecanismos de Busca (Search)
 
-### 15. Hybrid Search
+### 1. Hybrid Search
 *   **Conceito:** É o melhor dos dois mundos. Busca por **significado** (Vetor) + Busca por **palavra exata** (Keyword/BM25).
 *   **Como funciona:** Se você buscar "Erro 404", a busca por significado pode trazer coisas sobre "problemas de rede", mas a busca por palavra exata vai achar o "404" específico. Usamos **RRF (Reciprocal Rank Fusion)** para misturar esses dois resultados em uma lista única perfeita.
 
-### 16. Time-Weighted Retrieval
+### 2. Time-Weighted Retrieval
 *   **Conceito:** Ponderação por tempo. "O que é novo é mais relevante".
 *   **Como funciona:** O `MemoryRanker` calcula um `recency_score`. Se a memória é nova, ganha 1.0. Se é antiga, ganha 0.1. Esse valor é multiplicado pelo score de similaridade, fazendo com que coisas novas subam no ranking.
 
-### 17. MMR (Maximal Marginal Relevance)
+### 3. MMR (Maximal Marginal Relevance)
 *   **Conceito:** Diversidade. Evita que o agente receba 5 vezes a mesma informação.
 *   **Como funciona:** Se a busca retornar 3 resultados quase iguais, o algoritmo MMR percebe a repetição e "pula" as cópias, pegando o próximo resultado que seja diferente e traga informação nova.
 
-### 19. Personalized Retrieval
+### 4. Personalized Retrieval
 *   **Conceito:** Busca que te conhece.
 *   **Como funciona:** O sistema mantém um "Perfil do Usuário" (User Profile). Na hora de buscar, nós misturamos (blend) o que você perguntou com quem você é. Se você é um "Desenvolvedor Python" e pergunta sobre "bibliotecas", o sistema prioriza bibliotecas Python em vez de Java.
 
-### 20. Hierarchical Retrieval
+### 5. Hierarchical Retrieval
 *   **Conceito:** Busca em camadas.
 *   **Como funciona:** O sistema primeiro busca nos resumos globais (Nível 3). Se achar algo interessante, ele olha os resumos daquela sessão (Nível 2) e finalmente as falas específicas (Nível 1). É como navegar em pastas no computador.
 
