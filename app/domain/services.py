@@ -176,7 +176,11 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
 
 
 class MMRReranker:
-    """Implements Maximal Marginal Relevance (MMR) for reranking search results to ensure diversity."""
+    r"""Vectorized Maximal Marginal Relevance (MMR) Reranker for High-Diversity Retrieval.
+    
+    Formula:
+        MMR = argmax_{D_i in R \ S} [ lambda * Sim1(D_i, Q) - (1 - lambda) * max_{D_j in S} Sim2(D_i, D_j) ]
+    """
 
     def __init__(self, lambda_param: float = 0.5):
         self.lambda_param = lambda_param
@@ -187,67 +191,109 @@ class MMRReranker:
         vectors: dict[str, list[float]],
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Reranks the candidates using Maximal Marginal Relevance.
-
-        Args:
-            candidates: list of dicts from MemoryRanker (sorted by final_score desc).
-            vectors: dict mapping candidate memory IDs (as strings) to their dense embedding vectors.
-            limit: maximum number of items to return in the final selection.
-
-        Returns:
-            Sublist of candidates reranked and filtered to limit.
-        """
+        """Reranks candidates using SIMD-accelerated Maximal Marginal Relevance."""
         if not candidates or limit <= 0:
             return []
 
-        # Filter out candidates that do not have vectors, or keep them with low priority
-        # Let's perform MMR on the candidates
-        selected: list[dict[str, Any]] = []
-        unselected = list(candidates)
+        if len(candidates) <= 1 or limit == 1:
+            return candidates[:limit]
 
-        # Helper to compute similarity
-        def sim(doc_id: str, other_vec: list[float]) -> float:
-            vec = vectors.get(doc_id)
-            if vec is None:
-                return 0.0
-            return cosine_similarity(vec, other_vec)
+        try:
+            import numpy as np
 
-        # First item is always the top ranked candidate
-        first = unselected.pop(0)
-        selected.append(first)
+            # Fast vectorized implementation using NumPy
+            n = len(candidates)
+            c_ids = [c["id"] for c in candidates]
+            query_scores = np.array([float(c.get("semantic_score", 0.0)) for c in candidates], dtype=np.float32)
 
-        while len(selected) < limit and unselected:
-            best_score = -float("inf")
-            best_cand = None
+            # Build normalized embedding matrix
+            first_vec = next((vectors[cid] for cid in c_ids if cid in vectors and vectors[cid]), None)
+            if first_vec is None:
+                return candidates[:limit]
 
-            for cand in unselected:
-                cand_id = cand["id"]
-                sim_to_query = cand.get("semantic_score", 0.0)
+            dim = len(first_vec)
+            emb_matrix = np.zeros((n, dim), dtype=np.float32)
+            has_vector = np.zeros(n, dtype=bool)
 
-                # max sim to already selected
-                max_sim_to_selected = 0.0
-                cand_vec = vectors.get(cand_id)
-                if cand_vec and selected:
-                    max_sim_to_selected = max(
-                        sim(cand_id, vectors.get(sel["id"], []))
-                        for sel in selected
-                        if sel["id"] in vectors
-                    )
+            for idx, cid in enumerate(c_ids):
+                v = vectors.get(cid)
+                if v and len(v) == dim:
+                    emb_matrix[idx] = v
+                    has_vector[idx] = True
 
-                mmr_score = (
-                    self.lambda_param * sim_to_query
+            # Normalize embedding rows for cosine similarity: dot product = cosine
+            norms = np.linalg.norm(emb_matrix, axis=1, keepdims=True)
+            norms[norms == 0.0] = 1.0
+            emb_matrix = emb_matrix / norms
+
+            selected_indices: list[int] = [0]
+            unselected_mask = np.ones(n, dtype=bool)
+            unselected_mask[0] = False
+
+            while len(selected_indices) < min(limit, n) and np.any(unselected_mask):
+                unselected_idx = np.where(unselected_mask)[0]
+                
+                # Pairwise cosine similarity between unselected and all selected items
+                sub_embs = emb_matrix[unselected_idx]  # (U, D)
+                sel_embs = emb_matrix[selected_indices]  # (S, D)
+                
+                # Dot product (U, S)
+                sim_matrix = np.matmul(sub_embs, sel_embs.T)
+                max_sim_to_selected = np.max(sim_matrix, axis=1)
+
+                sub_query_scores = query_scores[unselected_idx]
+                mmr_scores = (
+                    self.lambda_param * sub_query_scores
                     - (1.0 - self.lambda_param) * max_sim_to_selected
                 )
 
-                if mmr_score > best_score:
-                    best_score = mmr_score
-                    best_cand = cand
+                best_relative_idx = int(np.argmax(mmr_scores))
+                best_global_idx = unselected_idx[best_relative_idx]
 
-            if best_cand:
-                unselected.remove(best_cand)
-                selected.append(best_cand)
-            else:
-                break
+                selected_indices.append(best_global_idx)
+                unselected_mask[best_global_idx] = False
 
-        return selected
+            return [candidates[i] for i in selected_indices]
+
+        except ImportError:
+            # Fallback pure-Python scalar implementation
+            selected: list[dict[str, Any]] = [candidates[0]]
+            unselected = candidates[1:]
+
+            def sim(doc_id: str, other_vec: list[float]) -> float:
+                vec = vectors.get(doc_id)
+                if vec is None:
+                    return 0.0
+                return cosine_similarity(vec, other_vec)
+
+            while len(selected) < limit and unselected:
+                best_score = -float("inf")
+                best_idx = 0
+
+                for idx, cand in enumerate(unselected):
+                    cand_id = cand["id"]
+                    sim_to_query = cand.get("semantic_score", 0.0)
+                    cand_vec = vectors.get(cand_id)
+
+                    max_sim_to_selected = 0.0
+                    if cand_vec:
+                        max_sim_to_selected = max(
+                            sim(cand_id, vectors.get(sel["id"], []))
+                            for sel in selected
+                            if sel["id"] in vectors
+                        )
+
+                    mmr_score = (
+                        self.lambda_param * sim_to_query
+                        - (1.0 - self.lambda_param) * max_sim_to_selected
+                    )
+
+                    if mmr_score > best_score:
+                        best_score = mmr_score
+                        best_idx = idx
+
+                selected.append(unselected.pop(best_idx))
+
+            return selected
+
 
